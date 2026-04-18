@@ -211,85 +211,76 @@ function exportPDF() {
   if (parsedRows.length === 0) return;
 
   const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-  const margin = 20;
-  const pageW = 210;
+  // 50x70mm card, portrait
+  const pageW = 50;
+  const pageH = 70;
+  const margin = 2.5;
   const contentW = pageW - margin * 2;
 
-  doc.setFillColor(0, 122, 255);
-  doc.rect(0, 0, 210, 30, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(18);
-  doc.setFont('helvetica', 'bold');
-  doc.text('DIVE RUNTIME PLAN', margin, 13);
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  const now = new Date();
-  doc.text('Generated: ' + now.toLocaleDateString() + ' ' + now.toLocaleTimeString(), margin, 20);
-  doc.text('For planning reference only', pageW - margin, 20, { align: 'right' });
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [pageW, pageH] });
 
+  // Column definitions scaled to 45mm usable width
   const cols = [
-    { label: 'Depth', width: 42, key: 'depth' },
-    { label: 'Time (min)', width: 42, key: 'time' },
-    { label: 'RT (min)', width: 42, key: 'rt' },
-    { label: 'Gas', width: 44, key: 'gas' }
+    { label: 'Depth', width: 13, key: 'depth' },
+    { label: 'Time', width: 9,  key: 'time' },
+    { label: 'RT',   width: 9,  key: 'rt' },
+    { label: 'Gas',  width: 14, key: 'gas' }
   ];
 
-  let y = 42;
-  const rowH = 9;
-  const headerH = 10;
+  const headerH = 5;
+  const rowH = 5.5;
+  let y = margin;
 
-  doc.setFillColor(30, 50, 90);
+  // Column header bar
+  doc.setFillColor(20, 40, 80);
   doc.rect(margin, y, contentW, headerH, 'F');
-
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(9);
+  doc.setFontSize(5.5);
   doc.setFont('helvetica', 'bold');
 
   let x = margin;
   for (const col of cols) {
-    doc.text(col.label.toUpperCase(), x + 3, y + 7);
+    doc.text(col.label.toUpperCase(), x + 1, y + 3.5);
     x += col.width;
   }
   y += headerH;
 
+  // Data rows
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
+  doc.setFontSize(6.5);
 
   for (let i = 0; i < parsedRows.length; i++) {
     const r = parsedRows[i];
-    const isEven = i % 2 === 0;
 
-    if (isEven) {
-      doc.setFillColor(240, 245, 255);
+    // Alternating row background
+    if (i % 2 === 0) {
+      doc.setFillColor(235, 242, 255);
       doc.rect(margin, y, contentW, rowH, 'F');
     }
 
-    doc.setTextColor(28, 28, 30);
+    doc.setTextColor(10, 10, 10);
     x = margin;
     for (const col of cols) {
       let val = r[col.key];
-      if (col.key === 'time' || col.key === 'rt') val = val + ' min';
-      doc.text(val, x + 3, y + 6.5);
+      doc.text(String(val), x + 1, y + 3.8);
       x += col.width;
     }
 
-    doc.setDrawColor(220, 220, 230);
-    doc.setLineWidth(0.2);
+    // Thin row divider
+    doc.setDrawColor(200, 210, 225);
+    doc.setLineWidth(0.1);
     doc.line(margin, y + rowH, margin + contentW, y + rowH);
 
     y += rowH;
   }
 
-  doc.setDrawColor(0, 122, 255);
-  doc.setLineWidth(0.5);
-  doc.rect(margin, 42, contentW, headerH + parsedRows.length * rowH);
+  // Outer border
+  doc.setDrawColor(20, 40, 80);
+  doc.setLineWidth(0.3);
+  doc.rect(margin, margin, contentW, headerH + parsedRows.length * rowH);
 
-  doc.setFontSize(8);
-  doc.setTextColor(150, 150, 160);
-  doc.text('This plan is for reference only. Always dive within your training and certification limits.', pageW / 2, 285, { align: 'center' });
-
+  const now = new Date();
   const filename = 'dive_plan_' + now.toISOString().slice(0, 10) + '.pdf';
   doc.save(filename);
 
