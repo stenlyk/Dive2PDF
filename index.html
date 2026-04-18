@@ -155,14 +155,16 @@ function parsePlan() {
     if (/^(RUNTIME PLAN|SUMMARY|GAS CONSUMPTION|Depth\s*Time|For planning)/i.test(line)) continue;
     if (/^(Max Depth|Total Runtime|TTS|Deco|CNS|OTU|Gas\s*Volume)/i.test(line)) continue;
 
+    const normalized = line.replace(/→/g, '>');
+
     const patterns = [
-      /^(\d+→\d+m)\s*(\d+)\s*(\d+)\s*([A-Za-z0-9/]+)(?:\s+([\d.]+))?$/,
+      /^(\d+>\d+m)\s*(\d+)\s*(\d+)\s*([A-Za-z0-9/]+)(?:\s+([\d.]+))?$/,
       /^(\d+m)\s*(\d+)\s*(\d+)\s*([A-Za-z0-9/]+)(?:\s+([\d.]+))?$/,
     ];
 
     let matched = false;
     for (const pat of patterns) {
-      const m = line.match(pat);
+      const m = normalized.match(pat);
       if (m) {
         parsedRows.push({ depth: m[1], time: m[2], rt: m[3], gas: m[4] });
         matched = true;
@@ -171,7 +173,7 @@ function parsePlan() {
     }
 
     if (!matched) {
-      const m2 = line.match(/^(\d+(?:→\d+)?m)(\d+)(\d+)([A-Za-z0-9/]+)(?:[\d.]+)?$/);
+      const m2 = normalized.match(/^(\d+(?:>\d+)?m)(\d+)(\d+)([A-Za-z0-9/]+)(?:[\d.]+)?$/);
       if (m2) {
         parsedRows.push({ depth: m2[1], time: m2[2], rt: m2[3], gas: m2[4] });
       }
@@ -288,9 +290,6 @@ function exportPDF() {
   setTimeout(() => document.getElementById('status').textContent = '', 4000);
 }
 
-// Pre-fill example
-document.getElementById('input').value = `RUNTIME PLAN 
-DepthTimeRTGasPPO2 0→40m22Air 40m1820Air1.1 40→12m323Air 12m326Air0.5 9m329Air0.4 6m534Air0.3 3m1146Air0.3`;
 parsePlan();
 </script>
 </body>
