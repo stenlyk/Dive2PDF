@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Dive Plan PDF</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f2f2f7;
+    min-height: 100vh;
+    padding: 20px 16px 40px;
+    color: #1c1c1e;
+  }
+  h1 {
+    font-size: 22px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: #1c1c1e;
+  }
+  .sub {
+    font-size: 13px;
+    color: #8e8e93;
+    margin-bottom: 20px;
+  }
+  .card {
+    background: white;
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+  label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #8e8e93;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: block;
+    margin-bottom: 8px;
+  }
+  textarea {
+    width: 100%;
+    border: none;
+    outline: none;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #1c1c1e;
+    resize: vertical;
+    min-height: 160px;
+    background: transparent;
+  }
+  .preview-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+  }
+  .preview-table th {
+    background: #007aff;
+    color: white;
+    padding: 8px 10px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+  .preview-table th:first-child { border-radius: 8px 0 0 0; }
+  .preview-table th:last-child { border-radius: 0 8px 0 0; }
+  .preview-table td {
+    padding: 8px 10px;
+    border-bottom: 0.5px solid #e5e5ea;
+    color: #1c1c1e;
+    font-variant-numeric: tabular-nums;
+  }
+  .preview-table tr:last-child td { border-bottom: none; }
+  .preview-table tr:nth-child(even) td { background: #f9f9fb; }
+  .empty-msg {
+    color: #8e8e93;
+    font-size: 14px;
+    text-align: center;
+    padding: 20px 0;
+  }
+  .btn {
+    width: 100%;
+    padding: 16px;
+    background: #007aff;
+    color: white;
+    border: none;
+    border-radius: 14px;
+    font-size: 17px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: opacity 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn:active { opacity: 0.8; transform: scale(0.98); }
+  .btn:disabled { background: #aeaeb2; cursor: not-allowed; }
+  .status {
+    margin-top: 12px;
+    font-size: 13px;
+    color: #34c759;
+    text-align: center;
+    min-height: 18px;
+  }
+  .row-count {
+    font-size: 12px;
+    color: #8e8e93;
+    text-align: right;
+    margin-top: 6px;
+  }
+</style>
+</head>
+<body>
+
+<h1>🤿 Dive Plan → PDF</h1>
+<p class="sub">Paste your runtime plan text, preview the table, then export.</p>
+
+<div class="card">
+  <label>Paste Runtime Plan Text</label>
+  <textarea id="input" placeholder="RUNTIME PLAN&#10;DepthTimeRTGasPPO2&#10;0→40m22Air&#10;40m1820Air1.1&#10;..." oninput="parsePlan()"></textarea>
+  <div class="row-count" id="rowCount">0 rows parsed</div>
+</div>
+
+<div class="card">
+  <label>Preview</label>
+  <div id="preview"><p class="empty-msg">Paste text above to see table</p></div>
+</div>
+
+<button class="btn" id="exportBtn" onclick="exportPDF()" disabled>
+  <span>Export PDF</span>
+</button>
+<div class="status" id="status"></div>
+
+<script>
+let parsedRows = [];
+
+function parsePlan() {
+  const raw = document.getElementById('input').value;
+  parsedRows = [];
+
+  const lines = raw.replace(/\r\n/g, '\n').split('\n');
+
+  for (let line of lines) {
+    line = line.trim();
+    if (!line) continue;
+
+    if (/^(RUNTIME PLAN|SUMMARY|GAS CONSUMPTION|Depth\s*Time|For planning)/i.test(line)) continue;
+    if (/^(Max Depth|Total Runtime|TTS|Deco|CNS|OTU|Gas\s*Volume)/i.test(line)) continue;
+
+    const patterns = [
+      /^(\d+→\d+m)\s*(\d+)\s*(\d+)\s*([A-Za-z0-9/]+)(?:\s+([\d.]+))?$/,
+      /^(\d+m)\s*(\d+)\s*(\d+)\s*([A-Za-z0-9/]+)(?:\s+([\d.]+))?$/,
+    ];
+
+    let matched = false;
+    for (const pat of patterns) {
+      const m = line.match(pat);
+      if (m) {
+        parsedRows.push({ depth: m[1], time: m[2], rt: m[3], gas: m[4] });
+        matched = true;
+        break;
+      }
+    }
+
+    if (!matched) {
+      const m2 = line.match(/^(\d+(?:→\d+)?m)(\d+)(\d+)([A-Za-z0-9/]+)(?:[\d.]+)?$/);
+      if (m2) {
+        parsedRows.push({ depth: m2[1], time: m2[2], rt: m2[3], gas: m2[4] });
+      }
+    }
+  }
+
+  renderPreview();
+  document.getElementById('rowCount').textContent = parsedRows.length + ' row' + (parsedRows.length !== 1 ? 's' : '') + ' parsed';
+  document.getElementById('exportBtn').disabled = parsedRows.length === 0;
+  document.getElementById('status').textContent = '';
+}
+
+function renderPreview() {
+  const container = document.getElementById('preview');
+  if (parsedRows.length === 0) {
+    container.innerHTML = '<p class="empty-msg">Paste text above to see table</p>';
+    return;
+  }
+
+  let html = `<table class="preview-table">
+    <thead><tr>
+      <th>Depth</th><th>Time</th><th>RT</th><th>Gas</th>
+    </tr></thead><tbody>`;
+  for (const r of parsedRows) {
+    html += `<tr>
+      <td>${r.depth}</td>
+      <td>${r.time} min</td>
+      <td>${r.rt} min</td>
+      <td>${r.gas}</td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function exportPDF() {
+  if (parsedRows.length === 0) return;
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  const margin = 20;
+  const pageW = 210;
+  const contentW = pageW - margin * 2;
+
+  doc.setFillColor(0, 122, 255);
+  doc.rect(0, 0, 210, 30, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('DIVE RUNTIME PLAN', margin, 13);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  const now = new Date();
+  doc.text('Generated: ' + now.toLocaleDateString() + ' ' + now.toLocaleTimeString(), margin, 20);
+  doc.text('For planning reference only', pageW - margin, 20, { align: 'right' });
+
+  const cols = [
+    { label: 'Depth', width: 42, key: 'depth' },
+    { label: 'Time (min)', width: 42, key: 'time' },
+    { label: 'RT (min)', width: 42, key: 'rt' },
+    { label: 'Gas', width: 44, key: 'gas' }
+  ];
+
+  let y = 42;
+  const rowH = 9;
+  const headerH = 10;
+
+  doc.setFillColor(30, 50, 90);
+  doc.rect(margin, y, contentW, headerH, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+
+  let x = margin;
+  for (const col of cols) {
+    doc.text(col.label.toUpperCase(), x + 3, y + 7);
+    x += col.width;
+  }
+  y += headerH;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+
+  for (let i = 0; i < parsedRows.length; i++) {
+    const r = parsedRows[i];
+    const isEven = i % 2 === 0;
+
+    if (isEven) {
+      doc.setFillColor(240, 245, 255);
+      doc.rect(margin, y, contentW, rowH, 'F');
+    }
+
+    doc.setTextColor(28, 28, 30);
+    x = margin;
+    for (const col of cols) {
+      let val = r[col.key];
+      if (col.key === 'time' || col.key === 'rt') val = val + ' min';
+      doc.text(val, x + 3, y + 6.5);
+      x += col.width;
+    }
+
+    doc.setDrawColor(220, 220, 230);
+    doc.setLineWidth(0.2);
+    doc.line(margin, y + rowH, margin + contentW, y + rowH);
+
+    y += rowH;
+  }
+
+  doc.setDrawColor(0, 122, 255);
+  doc.setLineWidth(0.5);
+  doc.rect(margin, 42, contentW, headerH + parsedRows.length * rowH);
+
+  doc.setFontSize(8);
+  doc.setTextColor(150, 150, 160);
+  doc.text('This plan is for reference only. Always dive within your training and certification limits.', pageW / 2, 285, { align: 'center' });
+
+  const filename = 'dive_plan_' + now.toISOString().slice(0, 10) + '.pdf';
+  doc.save(filename);
+
+  document.getElementById('status').textContent = '✓ PDF saved: ' + filename;
+  setTimeout(() => document.getElementById('status').textContent = '', 4000);
+}
+
+// Pre-fill example
+document.getElementById('input').value = `RUNTIME PLAN 
+DepthTimeRTGasPPO2 0→40m22Air 40m1820Air1.1 40→12m323Air 12m326Air0.5 9m329Air0.4 6m534Air0.3 3m1146Air0.3`;
+parsePlan();
+</script>
+</body>
+</html>
